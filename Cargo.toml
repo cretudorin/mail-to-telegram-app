@@ -1,0 +1,36 @@
+[package]
+name = "mail-to-telegram"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mtl"
+path = "src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+mailin = "0.6"
+log = "0.4.17"
+simple_logger = "4"
+regex = "1"
+lazy_static = "1"
+serde_json = "1"
+thiserror = "1"
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]
+
+[dependencies.surf]
+version = "2"
+default_features = false
+features = ["h1-client-rustls", "middleware-logger", "encoding"]
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.async-std]
+version = "1"
+features = ["attributes"]
