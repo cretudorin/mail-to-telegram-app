@@ -15,7 +15,7 @@
     "platform": "linux",
     "restart_policy": "unless-stopped",
     "ports": [
-      "17333:17333/tcp"
+      {"SMTP": "17333:17333/tcp"}
     ],
     "network_mode": "bridge",
     "sysctls": [
