@@ -9,3 +9,4 @@ services:
         # STANDARD_CHAT_ID: "123456789" # Add if you want a fallback chat_id if the id can't be extracted from the recipient email
       ports:
         - 17333:17333 # Set to the wanted port
+      restart: unless-stopped
