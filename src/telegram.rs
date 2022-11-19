@@ -19,7 +19,6 @@ lazy_static! {
 struct TelegramSendMessage<'a> {
     chat_id: u64,
     text: &'a str,
-    parse_mode: &'static str,
 }
 
 impl<'a> TelegramSendMessage<'a> {
@@ -27,7 +26,6 @@ impl<'a> TelegramSendMessage<'a> {
         Self {
             chat_id,
             text,
-            parse_mode: "HTML",
         }
     }
 }
