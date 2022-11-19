@@ -81,11 +81,16 @@ impl TelegramBroker {
                         let tmsg = serde_json::to_string(&tmsg);
                         if let Ok(tmsg) = tmsg {
                             log::info!("Send mail over telegram to chat id: {:?}", chat_id);
-                            surf::post(&*url)
+                            let res = surf::post(&*url)
                                 .body(tmsg)
                                 .content_type(mime::JSON)
-                                .await
-                                .ok();
+                                .await;
+                            if let Ok(mut resp) = res {
+                                log::info!("Request arrived at telegram bot api, response api code: {}", resp.status());
+                                log::debug!("API response: {:?}", resp.body_string().await);
+                            } else if let Err(e) = res {
+                                log::error!("Telegram bot api could not be called, error: {e}")
+                            }
                         }
                     } else {
                         log::warn!("Mail had to be disregarded because chat_id could not been optained by the recipient email and no fall back chat id was supplied. Email was {}", recipient);
