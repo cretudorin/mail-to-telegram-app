@@ -80,7 +80,7 @@ impl TelegramBroker {
                         let tmsg = TelegramSendMessage::new(chat_id, &msg.text);
                         let tmsg = serde_json::to_string(&tmsg);
                         if let Ok(tmsg) = tmsg {
-                            log::info!("Send mail over telegram to chat id: {chat_id}");
+                            log::info!("Send mail over telegram to chat id: {:?}", chat_id);
                             surf::post(&*url)
                                 .body(tmsg)
                                 .content_type(mime::JSON)
