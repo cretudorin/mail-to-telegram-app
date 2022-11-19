@@ -1,5 +1,5 @@
 # Mail-To-Telegram (MTL)
-A small and efficient SMTP server for OpenMediaVault that will recieve notification emails and forwards them to a Telegram bot written in Rust. The docker container just uses around 1.7MB in RAM and uses async I/O and should be able to handle pretty much any notification load you throw at it.
+A small and efficient SMTP server for OpenMediaVault that will recieve notification emails and forwards them to a Telegram bot written in Rust. The docker container just uses around a few megabytes of RAM and uses async I/O and should be able to handle pretty much any notification load you throw at it. 
 
 ## Setup
 The setup is pretty straightforward. Right now the only deployment method is docker. Alternatively you can build the server from source, but then you're on your own.
