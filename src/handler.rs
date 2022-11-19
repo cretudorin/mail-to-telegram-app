@@ -1,50 +1,80 @@
-use std::{io, net::IpAddr};
+use std::{io, mem, net::IpAddr};
 
 use async_std::channel::Sender;
-use mailin::{response::{OK, INTERNAL_ERROR}, Handler, Response};
+use mailin::{
+    response::{INTERNAL_ERROR, OK},
+    Handler, Response,
+};
+
+#[derive(Debug, Default)]
+pub struct Message {
+    pub sender: String,
+    pub recipients: Vec<String>,
+    pub text: String,
+}
+
+impl Message {
+    pub fn new(sender: String, recipients: Vec<String>, text: String) -> Self {
+        Self {
+            sender,
+            recipients,
+            text,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct TelegramMailHandler {
-    msg: Vec<u8>,
-    sender: Sender<String>,
+    from: String,
+    recipients: Vec<String>,
+    data: Vec<u8>,
+    sender: Sender<Message>,
 }
 
 impl TelegramMailHandler {
-    pub fn new(sender: Sender<String>) -> Self {
+    pub fn new(sender: Sender<Message>) -> Self {
         Self {
-            msg: Vec::new(),
+            data: Vec::new(),
+            recipients: Vec::new(),
+            from: String::default(),
             sender,
         }
     }
 }
 
 impl Handler for TelegramMailHandler {
-    fn helo(&mut self, ip: IpAddr, domain: &str) -> mailin::Response {
-        log::info!("HELO: {:?} {}", ip, domain);
+    fn helo(&mut self, _ip: IpAddr, _domainn: &str) -> mailin::Response {
         OK
     }
 
     /// Called when a data command is received
-    fn data_start(&mut self, domain: &str, from: &str, is8bit: bool, to: &[String]) -> Response {
-        log::info!("DATA start: {} {} {:?} {}", domain, from, to, is8bit);
-        self.msg = Vec::new();
+    fn data_start(&mut self, _domain: &str, from: &str, _is8bit: bool, to: &[String]) -> Response {
+        log::debug!("Email start recieved, collect entire email...");
+        self.data = Vec::new();
+        self.from = from.to_string();
+        self.recipients = to.to_vec();
         OK
     }
 
     /// Called when a data buffer is received
     fn data(&mut self, buf: &[u8]) -> io::Result<()> {
-        self.msg.append(&mut buf.to_vec());
-        log::info!("DATA: {:?}", String::from_utf8(buf.to_vec()).ok());
+        self.data.append(&mut buf.to_vec());
         Ok(())
     }
 
     /// Called at the end of receiving data
     fn data_end(&mut self) -> Response {
-        log::info!("Data end");
-        let msg = String::from_utf8(self.msg.clone());
+        log::info!("Email recieved, encode and send to TelegramBroker");
+        let msg = String::from_utf8(self.data.clone());
         if let Ok(msg) = msg {
-            log::info!("FULL EMAIL: {}", msg);
-            if let Err(e) = self.sender.send_blocking(msg) {
+            log::debug!("FULL EMAIL: {}", msg);
+            // No clone take of from and recipients
+            let recipients = mem::take(&mut self.recipients);
+            let from = mem::take(&mut self.from);
+            if let Err(e) = self
+                .sender
+                .send_blocking(Message::new(from, recipients, msg))
+            {
                 log::error!("Telegram msg broker error: {:?}", e);
                 return INTERNAL_ERROR;
             }

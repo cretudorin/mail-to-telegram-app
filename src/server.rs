@@ -1,6 +1,6 @@
 use std::{
     future::Future,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
     time::Duration,
 };
@@ -14,7 +14,11 @@ use async_std::{
 };
 use mailin::{Action, Session, SessionBuilder};
 
-use crate::{error::Error, handler::TelegramMailHandler, telegram::TelegramBroker};
+use crate::{
+    error::Error,
+    handler::{Message, TelegramMailHandler},
+    telegram::TelegramBroker,
+};
 
 pub struct SMTPTelegramServerBuilder {
     host: SocketAddr,
@@ -131,10 +135,7 @@ impl SMTPTelegramServer {
         Ok((None, false))
     }
 
-    async fn connection_loop(
-        stream: TcpStream,
-        sender: Sender<String>,
-    ) -> Result<(), Error> {
+    async fn connection_loop(stream: TcpStream, sender: Sender<Message>) -> Result<(), Error> {
         let mut session = SessionBuilder::new("Mail_to_telegram")
             .build(stream.peer_addr()?.ip(), TelegramMailHandler::new(sender));
         let stream = Arc::new(stream);
@@ -180,7 +181,15 @@ impl SMTPTelegramServer {
     }
 
     pub async fn listen(&self) -> Result<(), Error> {
-        log::info!("Server started...");
+        log::info!(
+            "Server started at {}, listening...",
+            self.listener
+                .local_addr()
+                .unwrap_or(SocketAddr::V4(SocketAddrV4::new(
+                    Ipv4Addr::new(0, 0, 0, 0),
+                    17333
+                )))
+        );
         self.broker.serve().await;
         let mut incoming = self.listener.incoming();
         while let Some(stream) = incoming.next().await {

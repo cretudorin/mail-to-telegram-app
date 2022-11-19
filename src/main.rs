@@ -2,7 +2,7 @@ use std::{env, net::SocketAddr};
 
 use async_std::task;
 use clap::Parser;
-use mail_to_telegram::{server::SMTPTelegramServerBuilder, error::Error};
+use mail_to_telegram::{error::Error, server::SMTPTelegramServerBuilder};
 use simple_logger::SimpleLogger;
 
 /// SMTP Server that forwards all emails as telegram messages
@@ -23,24 +23,34 @@ struct Args {
 
     /// The host the server is going to be hosted on. Default is 0.0.0.0:17333
     #[arg(long)]
-    host: Option<SocketAddr>
+    host: Option<SocketAddr>,
 }
 
 async fn create_server(args: Args) -> Result<(), Error> {
     let api_token = args.api_token.or_else(|| env::var("TELEGRAM_BOT_TOKEN").ok()).expect("No Telegram Bot Api Token supplied with the command line options or the TELEGRAM_BOT_TOKEN environment variable");
     let mut standard_chat_id = args.standard_chat_id;
     if standard_chat_id.is_none() {
-        let id = env::var("TELEGRAM_STANDARD_CHAT_ID").map(|id| id.parse::<u64>().unwrap_or_else(|_| panic!("ID '{}' could not be parsed to a number", id)));
-        if let Ok(id) = id{
+        let id = env::var("TELEGRAM_STANDARD_CHAT_ID").map(|id| {
+            id.parse::<u64>()
+                .unwrap_or_else(|_| panic!("ID '{}' could not be parsed to a number", id))
+        });
+        if let Ok(id) = id {
             standard_chat_id = Some(id);
         }
     }
-    let server = SMTPTelegramServerBuilder::new(api_token).with_socket(args.host).with_standard_chat_id(standard_chat_id).build().await?;
+    let server = SMTPTelegramServerBuilder::new(api_token)
+        .with_socket(args.host)
+        .with_standard_chat_id(standard_chat_id)
+        .build()
+        .await?;
     server.listen().await
 }
 
 fn main() -> Result<(), Error> {
-    SimpleLogger::new().with_level(log::LevelFilter::Info).init()?;
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .env()
+        .init()?;
     let args = Args::parse();
     if let Some(thread_count) = args.thread_count {
         env::set_var("ASYNC_STD_THREAD_COUNT", thread_count.to_string());

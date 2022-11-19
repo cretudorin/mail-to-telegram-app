@@ -5,5 +5,5 @@ pub enum Error {
     #[error("Can't parse host address")]
     SocketAddrParseError,
     #[error("Logger could not be set")]
-    LoggerSetError(#[from] log::SetLoggerError)
+    LoggerSetError(#[from] log::SetLoggerError),
 }

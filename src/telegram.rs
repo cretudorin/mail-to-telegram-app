@@ -1,4 +1,4 @@
-use std::{time::Duration, sync::Arc};
+use std::{sync::Arc, time::Duration};
 
 use async_std::{
     channel::{unbounded, Receiver, Sender},
@@ -9,34 +9,32 @@ use regex::Regex;
 use serde::Serialize;
 use surf::http::mime;
 
+use crate::handler::Message;
+
 lazy_static! {
-    pub static ref MESSAGE_REGEX: Regex = Regex::new(
-        r"To: (.+)\nSubject: (.+)\r\nDate: (.+)\r\nFrom: (.+)\r\nMessage-Id: (.+)\r\n([\s\S]*)"
-    )
-    .unwrap();
     pub static ref CHAT_ID_REGEX: Regex = Regex::new(r"(\d*)@telegram-bot\.com").unwrap();
 }
 
 #[derive(Serialize)]
-struct TelegramSendMessage {
+struct TelegramSendMessage<'a> {
     chat_id: u64,
-    text: String,
-    parse_mode: String,
+    text: &'a str,
+    parse_mode: &'static str,
 }
 
-impl TelegramSendMessage {
-    fn new(chat_id: u64, text: String) -> Self {
+impl<'a> TelegramSendMessage<'a> {
+    fn new(chat_id: u64, text: &'a str) -> Self {
         Self {
             chat_id,
             text,
-            parse_mode: "HTML".into(),
+            parse_mode: "HTML",
         }
     }
 }
 
 pub struct TelegramBroker {
-    sen: Sender<String>,
-    recv: Receiver<String>,
+    sen: Sender<Message>,
+    recv: Receiver<Message>,
     bot_url: Arc<String>,
     api_call_delay: Duration,
     standard_chat_id: Option<u64>,
@@ -48,18 +46,23 @@ impl TelegramBroker {
         Self {
             sen,
             recv,
-            bot_url: Arc::new(format!("https://api.telegram.org/bot{}/sendMessage", api_token)),
+            bot_url: Arc::new(format!(
+                "https://api.telegram.org/bot{}/sendMessage",
+                api_token
+            )),
             api_call_delay,
             standard_chat_id,
         }
     }
 
-    pub fn get_sender(&self) -> Sender<String> {
+    pub fn get_sender(&self) -> Sender<Message> {
         self.sen.clone()
     }
 
     fn parse_chat_id(email: &str, standard_chat_id: Option<u64>) -> Option<u64> {
-        let chat_id = CHAT_ID_REGEX.captures(email).and_then(|cap| cap[1].parse::<u64>().ok());
+        let chat_id = CHAT_ID_REGEX
+            .captures(email)
+            .and_then(|cap| cap[1].parse::<u64>().ok());
         chat_id.or(standard_chat_id)
     }
 
@@ -71,30 +74,24 @@ impl TelegramBroker {
         task::spawn(async move {
             while let Ok(msg) = r.recv().await {
                 log::debug!("Mail recieved");
-                let cap = MESSAGE_REGEX.captures(&msg);
-                if let Some(cap) = cap {
-                    let to = &cap[1];
-                    let subject = &cap[2];
-                    let date = &cap[3];
-                    let from = &cap[4];
-                    let message = &cap[6].replace('\r', "\n");
-                    let msg = format!("Subject: <b>{subject}</b>\nDate: <b>{date}</b>\nFrom: <b>{from}</b>\n{message}");
-                    log::debug!("Mail parsed");
-                    if let Some(chat_id) = Self::parse_chat_id(to, standard_chat_id) {
+                for recipient in msg.recipients {
+                    if let Some(chat_id) = Self::parse_chat_id(&recipient, standard_chat_id) {
                         log::debug!("Chatid present");
-                        let tmsg =
-                            TelegramSendMessage::new(chat_id, msg);
+                        let tmsg = TelegramSendMessage::new(chat_id, &msg.text);
                         let tmsg = serde_json::to_string(&tmsg);
                         if let Ok(tmsg) = tmsg {
-                            log::debug!("Send Telegram message: {tmsg}");
+                            log::info!("Send mail over telegram to chat id: {chat_id}");
                             surf::post(&*url)
                                 .body(tmsg)
                                 .content_type(mime::JSON)
                                 .await
                                 .ok();
                         }
+                    } else {
+                        log::warn!("Mail had to be disregarded because chat_id could not been optained by the recipient email and no fall back chat id was supplied. Email was {}", recipient);
                     }
                 }
+
                 task::sleep(wait_duration).await;
             }
         });
