@@ -1,10 +1,10 @@
 use std::{io, mem, net::IpAddr};
 
-use async_std::channel::Sender;
 use mailin::{
     response::{INTERNAL_ERROR, OK},
     Handler, Response,
 };
+use tokio::sync::mpsc::Sender;
 
 #[derive(Debug, Default)]
 pub struct Message {
@@ -73,7 +73,7 @@ impl Handler for TelegramMailHandler {
             let from = mem::take(&mut self.from);
             if let Err(e) = self
                 .sender
-                .send_blocking(Message::new(from, recipients, msg))
+                .blocking_send(Message::new(from, recipients, msg))
             {
                 log::error!("Telegram msg broker error: {:?}", e);
                 return INTERNAL_ERROR;

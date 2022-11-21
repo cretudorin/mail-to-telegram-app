@@ -1,9 +1,8 @@
-use std::{env, net::SocketAddr};
-
-use async_std::task;
 use clap::Parser;
 use mail_to_telegram::{error::Error, server::SMTPTelegramServerBuilder};
 use simple_logger::SimpleLogger;
+use std::{env, net::SocketAddr, cmp::min};
+use tokio::runtime::Builder;
 
 /// SMTP Server that forwards all emails as telegram messages
 #[derive(Parser, Debug)]
@@ -52,9 +51,22 @@ fn main() -> Result<(), Error> {
         .env()
         .init()?;
     let args = Args::parse();
-    if let Some(thread_count) = args.thread_count {
-        env::set_var("ASYNC_STD_THREAD_COUNT", thread_count.to_string());
+    let thread_count: usize;
+    if let Some(tc) = args.thread_count.or_else(|| {
+        env::var("ASYNC_STD_THREAD_COUNT")
+            .map(|tc| tc.parse::<usize>().ok())
+            .ok()
+            .flatten()
+    }) {
+        thread_count = tc;
+    } else {
+        thread_count = min(num_cpus::get(), 4);
     }
 
-    task::block_on(create_server(args))
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(thread_count)
+        .build()
+        .unwrap();
+
+    runtime.block_on(create_server(args))
 }
