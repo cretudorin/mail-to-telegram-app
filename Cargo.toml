@@ -31,11 +31,6 @@ features = ["tokio1"]
 version = "4"
 features = ["derive"]
 
-[dependencies.reqwest]
-version = "0.11"
-default_features = false
-features = ["rustls-tls"]
-
 [profile.release]
 lto = "thin"
 
