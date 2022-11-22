@@ -4,9 +4,9 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::{header, multipart::{Form, Part}, Client};
 use serde::Serialize;
-use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
-    task, time,
+use async_std::{
+    task,
+    channel::{Sender, Receiver, bounded},
 };
 
 use crate::handler::Message;
@@ -37,7 +37,7 @@ pub struct TelegramBroker {
 
 impl TelegramBroker {
     pub fn new(api_token: String, api_call_delay: Duration, standard_chat_id: Option<u64>) -> Self {
-        let (sen, recv) = channel(5000);
+        let (sen, recv) = bounded(5000);
         Self {
             sen,
             recv,
@@ -61,11 +61,11 @@ impl TelegramBroker {
         chat_id.or(standard_chat_id)
     }
 
-    pub async fn serve(&mut self) {
+    pub async fn serve(&self) {
         let standard_chat_id = self.standard_chat_id;
         let wait_duration = self.api_call_delay;
 
-        while let Some(msg) = self.recv.recv().await {
+        while let Ok(msg) = self.recv.recv().await {
             log::debug!("Mail recieved");
             for recipient in msg.recipients {
                 if let Some(chat_id) = Self::parse_chat_id(&recipient, standard_chat_id) {
@@ -120,7 +120,7 @@ impl TelegramBroker {
                 }
             }
 
-            time::sleep(wait_duration).await;
+            task::sleep(wait_duration).await;
         }
     }
 }

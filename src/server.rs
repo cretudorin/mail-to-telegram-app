@@ -1,16 +1,17 @@
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::Arc,
     time::Duration,
 };
 
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::{lookup_host, TcpListener, TcpStream, ToSocketAddrs},
-    sync::mpsc::Sender,
+use async_std::{
+    channel::Sender,
+    io::{prelude::BufReadExt, BufReader, WriteExt},
+    net::{TcpListener, TcpStream, ToSocketAddrs},
+    stream::StreamExt,
     task,
 };
-
 use mailin::{Action, Session, SessionBuilder};
 
 use crate::{
@@ -42,7 +43,8 @@ impl SMTPTelegramServerBuilder {
         mut self,
         host: impl ToSocketAddrs,
     ) -> Result<SMTPTelegramServerBuilder, Error> {
-        self.host = lookup_host(host)
+        self.host = host
+            .to_socket_addrs()
             .await?
             .next()
             .ok_or(Error::SocketAddrParseError)?;
@@ -133,27 +135,31 @@ impl SMTPTelegramServer {
         Ok((None, false))
     }
 
-    async fn connection_loop(mut stream: TcpStream, sender: Sender<Message>) -> Result<(), Error> {
+    async fn connection_loop(stream: TcpStream, sender: Sender<Message>) -> Result<(), Error> {
         let mut session = SessionBuilder::new("Mail_to_telegram")
             .build(stream.peer_addr()?.ip(), TelegramMailHandler::new(sender));
-        let (reader, mut writer) = stream.split();
-        let greeting = session.greeting();
-        let mut response = Vec::new();
-        greeting.write_to(&mut response)?;
-        writer.write_all(&response).await?;
+        let stream = Arc::new(stream);
+        {
+            let mut stream = &*stream;
+            let greeting = session.greeting();
+            let mut response = Vec::new();
+            greeting.write_to(&mut response)?;
+            stream.write_all(response.as_slice()).await?;
+        }
         log::debug!("Reader creation");
-        let reader = BufReader::new(reader); // 2
+        let reader = BufReader::new(&*stream); // 2
         log::debug!("Reader created");
         let mut lines = reader.lines();
 
         log::debug!("Enter read loop");
 
-        while let Some(line) = lines.next_line().await? {
+        while let Some(line) = lines.next().await {
             // 4
-            let line = format!("{}\r\n", line);
+            let line = format!("{}\r\n", line?);
             let (response, is_closing) = Self::process_line(&mut session, line.as_bytes()).await?;
             if let Some(res) = response {
-                writer.write_all(res.as_slice()).await?;
+                let mut stream = &*stream;
+                stream.write_all(res.as_slice()).await?;
             }
             if is_closing {
                 log::debug!("Connection closing");
@@ -163,7 +169,7 @@ impl SMTPTelegramServer {
         Ok(())
     }
 
-    fn spawn_and_log_error<F>(fut: F) -> task::JoinHandle<()>
+    fn spawn_and_log_error<F>(&self, fut: F) -> task::JoinHandle<()>
     where
         F: Future<Output = Result<(), Error>> + Send + 'static,
     {
@@ -174,7 +180,7 @@ impl SMTPTelegramServer {
         })
     }
 
-    pub async fn listen(mut self) -> Result<(), Error> {
+    pub async fn listen(&self) -> Result<(), Error> {
         log::info!(
             "Server started at {}, listening...",
             self.listener
@@ -184,13 +190,15 @@ impl SMTPTelegramServer {
                     17333
                 )))
         );
-        let sender = self.broker.get_sender();
-        task::spawn(async move { self.broker.serve().await });
-        loop {
-            let (stream, _) = self.listener.accept().await?;
+        self.broker.serve().await;
+        let mut incoming = self.listener.incoming();
+        while let Some(stream) = incoming.next().await {
+            let stream = stream?;
             log::debug!("Accepting from: {}", stream.peer_addr()?);
-            let s = sender.clone();
-            let _handle = task::spawn(Self::spawn_and_log_error(Self::connection_loop(stream, s)));
+            let _handle = task::spawn(
+                self.spawn_and_log_error(Self::connection_loop(stream, self.broker.get_sender())),
+            );
         }
+        Ok(())
     }
 }
