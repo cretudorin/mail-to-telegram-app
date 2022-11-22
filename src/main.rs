@@ -65,6 +65,7 @@ fn main() -> Result<(), Error> {
 
     let runtime = Builder::new_multi_thread()
         .worker_threads(thread_count)
+        .enable_all()
         .build()
         .unwrap();
 
