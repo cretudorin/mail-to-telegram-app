@@ -1,4 +1,5 @@
 FROM rust:1-buster as builder
+RUN cargo install cargo-deb
 WORKDIR /usr/src/mail-to-telegram
 COPY . .
 RUN cargo build --release
