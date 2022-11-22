@@ -1,6 +1,10 @@
 # Mail-To-Telegram (MTL)
 A small and efficient SMTP server for OpenMediaVault that will recieve notification emails and forwards them to a Telegram bot written in Rust. The docker container just uses around a few megabytes of RAM and uses async I/O and should be able to handle pretty much any notification load you throw at it. 
 
+In theory this should be compatible with everything that sends mail over SMTP, but I only test this using OpenMediaVault/Postfix.
+
+SSL is not supported and there are no plans to change that.
+
 ## Setup
 The setup is pretty straightforward. Right now the only deployment method is docker. Alternatively you can build the server from source, but then you're on your own.
 
@@ -38,8 +42,5 @@ Create a new template with this link:
 `https://raw.githubusercontent.com/swip3798/mail-to-telegram-app/master/yacht-template.json`
 The just follow the normal deployment steps.
 
-### Point OMV to your MTL instance
+#### Point OMV to your MTL instance
 Now just go in your OMV panel to your notification settings, enable SMTP and set the IP and port to your MTL instance, if it's running on the same server then you can use `localhost` as your ip.
-
-## Credits
-The logo used for the yacht template is from [Freepik from Flaticon](https://www.flaticon.com/free-icons/mail).
