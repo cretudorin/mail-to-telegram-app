@@ -35,6 +35,7 @@ pub struct TelegramBroker {
     sen: Sender<Message>,
     recv: Receiver<Message>,
     bot_url: Arc<String>,
+    file_url: Arc<String>,
     api_call_delay: Duration,
     standard_chat_id: Option<u64>,
 }
@@ -47,6 +48,10 @@ impl TelegramBroker {
             recv,
             bot_url: Arc::new(format!(
                 "https://api.telegram.org/bot{}/sendMessage",
+                api_token
+            )),
+            file_url: Arc::new(format!(
+                "https://api.telegram.org/bot{}/sendDocument",
                 api_token
             )),
             api_call_delay,
@@ -70,14 +75,17 @@ impl TelegramBroker {
         let wait_duration = self.api_call_delay;
         let recv = self.recv.clone();
         let url = self.bot_url.clone();
+        let file_url = self.file_url.clone();
         task::spawn(async move {
             while let Ok(msg) = recv.recv().await {
                 log::debug!("Mail recieved");
                 for recipient in msg.recipients {
                     if let Some(chat_id) = Self::parse_chat_id(&recipient, standard_chat_id) {
                         log::debug!("Chatid present");
+                        let mut url = url.clone();
                         let body = if msg.text.len() < 4096 {
                             let tmsg = TelegramSendMessage::new(chat_id, &msg.text);
+
                             serde_json::to_string(&tmsg)
                                 .map_err(|e| {
                                     log::error!(
@@ -102,11 +110,11 @@ impl TelegramBroker {
                                         .mime_str("text/plain")
                                         .unwrap(),
                                 );
+                            url = file_url.clone();
                             Some(tmsg.boundary().to_string())
                         };
                         if let Some(tmsg) = body {
                             log::info!("Send mail over telegram to chat id '{:?}' ", chat_id,);
-                            let url = url.clone();
                             task::spawn(async move {
                                 let client = Client::new();
                                 let res = client
