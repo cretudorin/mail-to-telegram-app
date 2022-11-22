@@ -6,12 +6,11 @@ use async_std::{
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use reqwest::{
-    header,
-    multipart::{Form, Part},
-    Client, StatusCode,
+use telegram_bot_api::{
+    bot::BotApi,
+    methods::{SendDocument, SendMessage},
+    types::{ChatId, InputFile},
 };
-use serde::Serialize;
 
 use crate::handler::Message;
 
@@ -19,41 +18,29 @@ lazy_static! {
     pub static ref CHAT_ID_REGEX: Regex = Regex::new(r"(\d*)@telegram-bot\.com").unwrap();
 }
 
-#[derive(Serialize)]
-struct TelegramSendMessage<'a> {
-    chat_id: u64,
-    text: &'a str,
-}
-
-impl<'a> TelegramSendMessage<'a> {
-    fn new(chat_id: u64, text: &'a str) -> Self {
-        Self { chat_id, text }
-    }
-}
-
 pub struct TelegramBroker {
     sen: Sender<Message>,
     recv: Receiver<Message>,
-    bot_url: Arc<String>,
-    file_url: Arc<String>,
+    bot: Arc<BotApi>,
     api_call_delay: Duration,
     standard_chat_id: Option<u64>,
 }
 
 impl TelegramBroker {
-    pub fn new(api_token: String, api_call_delay: Duration, standard_chat_id: Option<u64>) -> Self {
+    pub async fn new(
+        api_token: String,
+        api_call_delay: Duration,
+        standard_chat_id: Option<u64>,
+    ) -> Self {
         let (sen, recv) = bounded(5000);
         Self {
             sen,
             recv,
-            bot_url: Arc::new(format!(
-                "https://api.telegram.org/bot{}/sendMessage",
-                api_token
-            )),
-            file_url: Arc::new(format!(
-                "https://api.telegram.org/bot{}/sendDocument",
-                api_token
-            )),
+            bot: Arc::new(
+                BotApi::new(api_token, None)
+                    .await
+                    .expect("TELEGRAM_BOT_TOKEN incorrect"),
+            ),
             api_call_delay,
             standard_chat_id,
         }
@@ -74,72 +61,33 @@ impl TelegramBroker {
         let standard_chat_id = self.standard_chat_id;
         let wait_duration = self.api_call_delay;
         let recv = self.recv.clone();
-        let url = self.bot_url.clone();
-        let file_url = self.file_url.clone();
+        let bot = self.bot.clone();
         task::spawn(async move {
             while let Ok(msg) = recv.recv().await {
                 log::debug!("Mail recieved");
                 for recipient in msg.recipients {
                     if let Some(chat_id) = Self::parse_chat_id(&recipient, standard_chat_id) {
                         log::debug!("Chatid present");
-                        let mut url = url.clone();
-                        let body = if msg.text.len() < 4096 {
-                            let tmsg = TelegramSendMessage::new(chat_id, &msg.text);
-
-                            serde_json::to_string(&tmsg)
-                                .map_err(|e| {
-                                    log::error!(
-                                    "Constructing normal telegram message payload failed, error: {:?}",
-                                    e
-                                );
-                                    e
-                                })
-                                .ok()
+                        let result = if msg.text.len() < 4096 {
+                            let message =
+                                SendMessage::new(ChatId::IntType(chat_id as i64), msg.text.clone());
+                            bot.send_message(message).await
                         } else {
-                            log::info!(
-                                "Mail needs to be send as text file, because of the size of {}",
-                                msg.text.len()
+                            let message = SendDocument::new(
+                                ChatId::IntType(chat_id as i64),
+                                InputFile::FileBytes(
+                                    "mail.txt".to_string(),
+                                    msg.text.clone().into_bytes(),
+                                ),
                             );
-                            let tmsg = Form::new()
-                                .text("caption", "Mail was too large, sent as text file")
-                                .text("chat_id", chat_id.to_string())
-                                .part(
-                                    "document",
-                                    Part::bytes(msg.text.clone().into_bytes())
-                                        .file_name("mail.txt")
-                                        .mime_str("text/plain")
-                                        .unwrap(),
-                                );
-                            url = file_url.clone();
-                            Some(tmsg.boundary().to_string())
+                            bot.send_document(message).await
                         };
-                        if let Some(tmsg) = body {
-                            log::info!("Send mail over telegram to chat id '{:?}' ", chat_id,);
-                            task::spawn(async move {
-                                let client = Client::new();
-                                let res = client
-                                    .post(&*url)
-                                    .body(tmsg)
-                                    .header(header::CONTENT_TYPE, "application/json")
-                                    .send()
-                                    .await;
-                                if let Ok(resp) = res {
-                                    log::info!(
-                                        "Request arrived at telegram bot api, response api code: {}",
-                                        resp.status()
-                                    );
-                                    if resp.status() != StatusCode::OK {
-                                        log::error!(
-                                            "API status code not OK, loggin body {:?}",
-                                            resp.text().await
-                                        );
-                                    } else {
-                                        log::debug!("API response: {:?}", resp.text().await);
-                                    }
-                                } else if let Err(e) = res {
-                                    log::error!("Telegram bot api could not be called, error: {e}")
-                                }
-                            });
+                        match result {
+                            Ok(_) => log::info!("Mail successfully send to telegram bot"),
+                            Err(e) => log::error!(
+                                "Mail send over telegram failed due to this error: {:?}",
+                                e
+                            ),
                         }
                     } else {
                         log::warn!("Mail had to be disregarded because chat_id could not been optained by the recipient email and no fall back chat id was supplied. Email was {}", recipient);

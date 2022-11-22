@@ -1,0 +1,9 @@
+[Unit]
+Description=Mail-To-Telegram
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+ExecStart=/usr/bin/mail-to-telegram
+
+[Install]
+WantedBy=multi-user.target

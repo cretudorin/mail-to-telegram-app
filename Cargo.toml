@@ -2,10 +2,15 @@
 name = "mail-to-telegram"
 version = "0.1.0"
 edition = "2021"
+authors = ["Christian Schweigel"]
+license-file = "LICENSE-APACHE"
 
-[[bin]]
-name = "mtl"
-path = "src/main.rs"
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+
+[package.metadata.deb.systemd-units]
+unit-name = "mail-to-telegram"
+enable = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,9 +20,8 @@ log = "0.4.17"
 simple_logger = "4"
 regex = "1"
 lazy_static = "1"
-serde_json = "1.0.88"
 thiserror = "1"
-num_cpus = "1.14.0"
+telegram-bot-api = "0.1.2"
 
 [dependencies.async-std]
 version = "1"
@@ -27,14 +31,12 @@ features = ["tokio1"]
 version = "4"
 features = ["derive"]
 
-[dependencies.serde]
-version = "1"
-features = ["derive"]
-
 [dependencies.reqwest]
 version = "0.11"
 default_features = false
-features = ["rustls-tls", "multipart"]
+features = ["rustls-tls"]
 
 [profile.release]
 lto = "thin"
+
+

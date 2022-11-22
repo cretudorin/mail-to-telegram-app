@@ -91,7 +91,8 @@ impl SMTPTelegramServerBuilder {
                 self.api_token,
                 self.telegram_bot_api_delay,
                 self.standard_chat_id,
-            ),
+            )
+            .await,
         })
     }
 }
