@@ -9,7 +9,7 @@ use regex::Regex;
 use reqwest::{
     header,
     multipart::{Form, Part},
-    Client,
+    Client, StatusCode,
 };
 use serde::Serialize;
 
@@ -120,7 +120,14 @@ impl TelegramBroker {
                                         "Request arrived at telegram bot api, response api code: {}",
                                         resp.status()
                                     );
-                                    log::debug!("API response: {:?}", resp.text().await);
+                                    if resp.status() != StatusCode::OK {
+                                        log::error!(
+                                            "API status code not OK, loggin body {:?}",
+                                            resp.text().await
+                                        );
+                                    } else {
+                                        log::debug!("API response: {:?}", resp.text().await);
+                                    }
                                 } else if let Err(e) = res {
                                     log::error!("Telegram bot api could not be called, error: {e}")
                                 }
