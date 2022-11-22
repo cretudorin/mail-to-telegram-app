@@ -73,13 +73,14 @@ impl TelegramBroker {
                                 SendMessage::new(ChatId::IntType(chat_id as i64), msg.text.clone());
                             bot.send_message(message).await
                         } else {
-                            let message = SendDocument::new(
+                            let mut message = SendDocument::new(
                                 ChatId::IntType(chat_id as i64),
                                 InputFile::FileBytes(
                                     "mail.txt".to_string(),
                                     msg.text.clone().into_bytes(),
                                 ),
                             );
+                            message.caption = Some("The mail was too long, send as text file".to_string());
                             bot.send_document(message).await
                         };
                         match result {
