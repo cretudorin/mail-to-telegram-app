@@ -2,10 +2,10 @@
     "type": 1,
     "title": "Mail-To-Telegram",
     "name": "mail-to-telegram",
-    "description": "This is a description.",
-    "logo": "https://github.com/swip3798/mail-to-telegram-app/raw/master/logo.png",
+    "description": "SMTP Server for OpenMediaVault to forward notification emails to a Telegram Bot.",
+    "logo": "https://github.com/swip3798/mail-to-telegram-app/raw/master/logo.svg",
     "image": "swip3798/mail-to-telegram:latest",
-    "note": "SMTP Server for OpenMediaVault to forward notification emails to a Telegram Bot",
+    "note": "SMTP Server for OpenMediaVault to forward notification emails to a Telegram Bot.",
     "categories": [
       "SMTP",
       "Mail",
