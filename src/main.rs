@@ -1,9 +1,12 @@
-use std::{env, net::SocketAddr};
-
 use async_std::task;
 use clap::Parser;
+use dotenv::dotenv;
 use mail_to_telegram::{error::Error, server::SMTPTelegramServerBuilder};
 use simple_logger::SimpleLogger;
+use std::{
+    env,
+    net::{Ipv4Addr, SocketAddr},
+};
 
 /// SMTP Server that forwards all emails as telegram messages
 #[derive(Parser, Debug)]
@@ -21,7 +24,7 @@ struct Args {
     /// If chat id can't be parsed out of the recipient email (use following format: YOUR_CHAT_ID@telegram-bot.com), it can fall back to the chat_id. Alternatively you can use the TELEGRAM_STANDARD_CHAT_ID environment variable. If no standard is present and the chat id can't be parsed, no telegram message is sent
     standard_chat_id: Option<u64>,
 
-    /// The host the server is going to be hosted on. Default is 0.0.0.0:17333
+    /// The host the server is going to be hosted on. Default is 127.0.0.1:17333
     #[arg(long)]
     host: Option<SocketAddr>,
 }
@@ -38,15 +41,20 @@ async fn create_server(args: Args) -> Result<(), Error> {
             standard_chat_id = Some(id);
         }
     }
-    let server = SMTPTelegramServerBuilder::new(api_token)
-        .with_socket(args.host)
-        .with_standard_chat_id(standard_chat_id)
+
+    let socket = args.host.unwrap_or(match env::var("HOST") {
+        Ok(value) => value.parse::<SocketAddr>().unwrap(),
+        Err(_err) => SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 17333),
+    });
+
+    let server = SMTPTelegramServerBuilder::new(api_token, socket, standard_chat_id)
         .build()
         .await?;
     server.listen().await
 }
 
 fn main() -> Result<(), Error> {
+    dotenv().ok();
     SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
         .env()

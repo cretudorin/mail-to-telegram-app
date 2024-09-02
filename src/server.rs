@@ -1,6 +1,6 @@
 use std::{
     future::Future,
-    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
     time::Duration,
 };
@@ -8,7 +8,7 @@ use std::{
 use async_std::{
     channel::Sender,
     io::{prelude::BufReadExt, BufReader, WriteExt},
-    net::{TcpListener, TcpStream, ToSocketAddrs},
+    net::{TcpListener, TcpStream},
     stream::StreamExt,
     task,
 };
@@ -21,72 +21,31 @@ use crate::{
 };
 
 pub struct SMTPTelegramServerBuilder {
-    host: SocketAddr,
+    socket: SocketAddr,
     api_token: String,
     standard_chat_id: Option<u64>,
     telegram_bot_api_delay: Duration,
 }
 
 impl SMTPTelegramServerBuilder {
-    pub fn new(api_token: impl Into<String>) -> SMTPTelegramServerBuilder {
+    pub fn new(
+        api_token: impl Into<String>,
+        socket: SocketAddr,
+        standard_chat_id: Option<u64>,
+    ) -> SMTPTelegramServerBuilder {
         let api_token = api_token.into();
 
         Self {
-            host: "0.0.0.0:17333".parse().unwrap(),
+            socket,
             api_token,
-            standard_chat_id: None,
+            standard_chat_id: standard_chat_id.into(),
             telegram_bot_api_delay: Duration::from_secs(0),
         }
     }
 
-    pub async fn with_host(
-        mut self,
-        host: impl ToSocketAddrs,
-    ) -> Result<SMTPTelegramServerBuilder, Error> {
-        self.host = host
-            .to_socket_addrs()
-            .await?
-            .next()
-            .ok_or(Error::SocketAddrParseError)?;
-        Ok(self)
-    }
-
-    pub fn with_socket(mut self, host: impl Into<Option<SocketAddr>>) -> SMTPTelegramServerBuilder {
-        if let Some(host) = host.into() {
-            self.host = host;
-        } else {
-            self.host = "0.0.0.0:17333".parse().unwrap();
-        }
-        self
-    }
-
-    pub fn with_ip(mut self, ip: impl Into<IpAddr>) -> SMTPTelegramServerBuilder {
-        let ip = ip.into();
-        self.host.set_ip(ip);
-        self
-    }
-
-    pub fn with_port(mut self, port: u16) -> SMTPTelegramServerBuilder {
-        self.host.set_port(port);
-        self
-    }
-
-    pub fn with_standard_chat_id(
-        mut self,
-        chat_id: impl Into<Option<u64>>,
-    ) -> SMTPTelegramServerBuilder {
-        self.standard_chat_id = chat_id.into();
-        self
-    }
-
-    pub fn with_telegram_bot_api_delay(mut self, delay: Duration) -> SMTPTelegramServerBuilder {
-        self.telegram_bot_api_delay = delay;
-        self
-    }
-
     pub async fn build(self) -> Result<SMTPTelegramServer, Error> {
         Ok(SMTPTelegramServer {
-            listener: TcpListener::bind(self.host).await?,
+            listener: TcpListener::bind(self.socket).await?,
             broker: TelegramBroker::new(
                 self.api_token,
                 self.telegram_bot_api_delay,
