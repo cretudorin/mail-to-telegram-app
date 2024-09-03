@@ -27,7 +27,7 @@ services:
       environment:
         TELEGRAM_BOT_TOKEN: "00000000:dhwaiuhdiuwahiudhwaiu" # Set this to your own API Token
         # ASYNC_STD_THREAD_COUNT: "4" # Add if you want to change the thread count used by the mtl server
-        # STANDARD_CHAT_ID: "123456789" # Add if you want a fallback chat_id if the id can't be extracted from the recipient email
+        # TELEGRAM_STANDARD_CHAT_ID: "123456789" # Add if you want a fallback chat_id if the id can't be extracted from the recipient email
       ports:
         - 17333:17333 # Set to the wanted port
       restart: unless-stopped
